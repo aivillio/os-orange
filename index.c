@@ -36,6 +36,17 @@ static int compare_index_entries(const void *a, const void *b) {
     return strcmp(ea->path, eb->path);
 }
 
+static int is_stageable_path(const char *path) {
+    if (!path || path[0] == '\0') return 0;
+    if (path[0] == '/') return 0;
+    if (strchr(path, '\n') || strchr(path, '\r')) return 0;
+    if (strcmp(path, ".") == 0 || strcmp(path, "..") == 0) return 0;
+    if (strstr(path, "/../") != NULL) return 0;
+    if (strncmp(path, "../", 3) == 0) return 0;
+    if (strlen(path) >= sizeof(((IndexEntry *)0)->path)) return 0;
+    return 1;
+}
+
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
 // Find an index entry by path (linear scan).
@@ -265,6 +276,8 @@ int index_save(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
+    if (!is_stageable_path(path)) return -1;
+
     struct stat st;
     if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
         return -1;
