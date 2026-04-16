@@ -184,7 +184,11 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         }
     }
 
-    int dirfd = open(shard_dir, O_RDONLY | O_DIRECTORY);
+    int dir_open_flags = O_RDONLY;
+#ifdef O_DIRECTORY
+    dir_open_flags |= O_DIRECTORY;
+#endif
+    int dirfd = open(shard_dir, dir_open_flags);
     if (dirfd >= 0) {
         fsync(dirfd);
         close(dirfd);
