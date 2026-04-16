@@ -102,6 +102,28 @@ typedef struct {
 
 #define MAX_STAGED_ENTRIES 10000
 
+static int is_valid_index_path(const char *path) {
+    if (!path || path[0] == '\0') return 0;
+    if (path[0] == '/') return 0;
+
+    const char *segment = path;
+    while (*segment) {
+        const char *slash = strchr(segment, '/');
+        size_t len = slash ? (size_t)(slash - segment) : strlen(segment);
+
+        if (len == 0) return 0;
+        if ((len == 1 && segment[0] == '.') ||
+            (len == 2 && segment[0] == '.' && segment[1] == '.')) {
+            return 0;
+        }
+
+        if (!slash) break;
+        segment = slash + 1;
+    }
+
+    return 1;
+}
+
 static int load_staged_entries(StagedEntry *entries, int *count_out) {
     *count_out = 0;
 
@@ -136,6 +158,10 @@ static int load_staged_entries(StagedEntry *entries, int *count_out) {
 
         e->mode = mode;
         snprintf(e->path, sizeof(e->path), "%s", path);
+        if (!is_valid_index_path(e->path)) {
+            fclose(f);
+            return -1;
+        }
         (*count_out)++;
     }
 
