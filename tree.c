@@ -80,6 +80,8 @@ int tree_parse(const void *data, size_t len, Tree *tree_out) {
 
         tree_out->count++;
     }
+
+    if (ptr != end) return -1;
     return 0;
 }
 
