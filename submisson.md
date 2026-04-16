@@ -176,3 +176,20 @@ How real Git avoids this:
 - Uses reachability rules that protect recent/unreferenced-but-new objects (grace periods, reflogs, prune windows).
 - Packs and prunes in controlled phases so objects referenced by in-flight operations are not removed prematurely.
 
+## commit count evidence
+
+Commands used:
+
+```bash
+git rev-list --count HEAD -- object.c
+git rev-list --count HEAD -- tree.c
+git rev-list --count HEAD -- index.c
+git rev-list --count HEAD -- commit.c
+```
+
+Current counts:
+- Phase 1 (`object.c`): 6
+- Phase 2 (`tree.c`): 6
+- Phase 3 (`index.c`): 6
+- Phase 4 (`commit.c`): 6
+
