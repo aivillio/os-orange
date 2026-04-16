@@ -29,6 +29,11 @@
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out);
 
+static const char *next_line(const char *p) {
+    const char *nl = strchr(p, '\n');
+    return nl ? nl + 1 : NULL;
+}
+
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
 // Parse raw commit data into a Commit struct.
@@ -36,18 +41,23 @@ int commit_parse(const void *data, size_t len, Commit *commit_out) {
     (void)len;
     const char *p = (const char *)data;
     char hex[HASH_HEX_SIZE + 1];
+    const char *next;
 
     // "tree <hex>\n"
     if (sscanf(p, "tree %64s\n", hex) != 1) return -1;
     if (hex_to_hash(hex, &commit_out->tree) != 0) return -1;
-    p = strchr(p, '\n') + 1;
+    next = next_line(p);
+    if (!next) return -1;
+    p = next;
 
     // optional "parent <hex>\n"
     if (strncmp(p, "parent ", 7) == 0) {
         if (sscanf(p, "parent %64s\n", hex) != 1) return -1;
         if (hex_to_hash(hex, &commit_out->parent) != 0) return -1;
         commit_out->has_parent = 1;
-        p = strchr(p, '\n') + 1;
+        next = next_line(p);
+        if (!next) return -1;
+        p = next;
     } else {
         commit_out->has_parent = 0;
     }
@@ -63,9 +73,15 @@ int commit_parse(const void *data, size_t len, Commit *commit_out) {
     *last_space = '\0';
     snprintf(commit_out->author, sizeof(commit_out->author), "%s", author_buf);
     commit_out->timestamp = ts;
-    p = strchr(p, '\n') + 1;  // skip author line
-    p = strchr(p, '\n') + 1;  // skip committer line
-    p = strchr(p, '\n') + 1;  // skip blank line
+    next = next_line(p);  // skip author line
+    if (!next) return -1;
+    p = next;
+    next = next_line(p);  // skip committer line
+    if (!next) return -1;
+    p = next;
+    next = next_line(p);  // skip blank line
+    if (!next) return -1;
+    p = next;
 
     snprintf(commit_out->message, sizeof(commit_out->message), "%s", p);
     return 0;
