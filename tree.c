@@ -87,11 +87,11 @@ static int compare_tree_entries(const void *a, const void *b) {
     return strcmp(((const TreeEntry *)a)->name, ((const TreeEntry *)b)->name);
 }
 
-static int tree_has_entry(const Tree *tree, const char *name) {
+static TreeEntry *tree_find_entry(Tree *tree, const char *name) {
     for (int i = 0; i < tree->count; i++) {
-        if (strcmp(tree->entries[i].name, name) == 0) return 1;
+        if (strcmp(tree->entries[i].name, name) == 0) return &tree->entries[i];
     }
-    return 0;
+    return NULL;
 }
 
 typedef struct {
@@ -183,7 +183,11 @@ static int write_tree_level(const StagedEntry *entries, int entry_count, const c
 
         const char *slash = strchr(rel, '/');
         if (!slash) {
-            if (tree_has_entry(&tree, rel)) continue;
+            TreeEntry *existing = tree_find_entry(&tree, rel);
+            if (existing) {
+                if (existing->mode == MODE_DIR) return -1;
+                continue;
+            }
             if (tree.count >= MAX_TREE_ENTRIES) return -1;
 
             TreeEntry *te = &tree.entries[tree.count++];
@@ -200,7 +204,11 @@ static int write_tree_level(const StagedEntry *entries, int entry_count, const c
         memcpy(dir_name, rel, dir_len);
         dir_name[dir_len] = '\0';
 
-        if (tree_has_entry(&tree, dir_name)) continue;
+        TreeEntry *existing = tree_find_entry(&tree, dir_name);
+        if (existing) {
+            if (existing->mode != MODE_DIR) return -1;
+            continue;
+        }
         if (tree.count >= MAX_TREE_ENTRIES) return -1;
 
         char child_prefix[1024];
