@@ -270,7 +270,8 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
 
     char type_str[16];
     size_t declared_size;
-    if (sscanf(header, "%15s %zu", type_str, &declared_size) != 2) {
+    char trailing;
+    if (sscanf(header, "%15s %zu%c", type_str, &declared_size, &trailing) != 2) {
         free(buf);
         return -1;
     }
