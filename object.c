@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <limits.h>
 #include <openssl/evp.h>
 
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
@@ -95,6 +96,8 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
+    if (len > 0 && data == NULL) return -1;
+
     const char *type_str;
     switch (type) {
         case OBJ_BLOB: type_str = "blob"; break;
@@ -108,6 +111,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     if (n < 0 || (size_t)n >= sizeof(header) - 1) return -1;
     size_t header_len = (size_t)n + 1;
 
+    if (header_len > SIZE_MAX - len) return -1;
     size_t full_len = header_len + len;
     uint8_t *full_obj = malloc(full_len);
     if (!full_obj) return -1;
@@ -209,6 +213,8 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 // The caller is responsible for calling free(*data_out).
 // Returns 0 on success, -1 on error (file not found, corrupt, etc.).
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
+    if (!id || !type_out || !data_out || !len_out) return -1;
+
     char path[512];
     object_path(id, path, sizeof(path));
 
