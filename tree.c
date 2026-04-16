@@ -15,6 +15,10 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <inttypes.h>
+
+// Forward declaration (implemented in object.c)
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 
 // ─── Mode Constants ─────────────────────────────────────────────────────────
 
@@ -83,6 +87,118 @@ static int compare_tree_entries(const void *a, const void *b) {
     return strcmp(((const TreeEntry *)a)->name, ((const TreeEntry *)b)->name);
 }
 
+static int tree_has_entry(const Tree *tree, const char *name) {
+    for (int i = 0; i < tree->count; i++) {
+        if (strcmp(tree->entries[i].name, name) == 0) return 1;
+    }
+    return 0;
+}
+
+typedef struct {
+    uint32_t mode;
+    ObjectID hash;
+    char path[512];
+} StagedEntry;
+
+#define MAX_STAGED_ENTRIES 10000
+
+static int load_staged_entries(StagedEntry *entries, int *count_out) {
+    *count_out = 0;
+
+    FILE *f = fopen(INDEX_FILE, "r");
+    if (!f) return 0;
+
+    char line[2048];
+    while (fgets(line, sizeof(line), f)) {
+        if (*count_out >= MAX_STAGED_ENTRIES) {
+            fclose(f);
+            return -1;
+        }
+
+        unsigned int mode;
+        char hash_hex[HASH_HEX_SIZE + 1];
+        uint64_t mtime_unused;
+        unsigned int size_unused;
+        char path[512];
+
+        int parsed = sscanf(line, "%o %64s %" SCNu64 " %u %511[^\n]",
+                            &mode, hash_hex, &mtime_unused, &size_unused, path);
+        if (parsed != 5) {
+            fclose(f);
+            return -1;
+        }
+
+        StagedEntry *e = &entries[*count_out];
+        if (hex_to_hash(hash_hex, &e->hash) != 0) {
+            fclose(f);
+            return -1;
+        }
+
+        e->mode = mode;
+        snprintf(e->path, sizeof(e->path), "%s", path);
+        (*count_out)++;
+    }
+
+    fclose(f);
+    return 0;
+}
+
+static int write_tree_level(const StagedEntry *entries, int entry_count, const char *prefix, ObjectID *id_out) {
+    Tree tree;
+    tree.count = 0;
+    size_t prefix_len = strlen(prefix);
+
+    for (int i = 0; i < entry_count; i++) {
+        const StagedEntry *entry = &entries[i];
+        if (prefix_len > 0 && strncmp(entry->path, prefix, prefix_len) != 0) continue;
+
+        const char *rel = entry->path + prefix_len;
+        if (rel[0] == '\0') continue;
+
+        const char *slash = strchr(rel, '/');
+        if (!slash) {
+            if (tree_has_entry(&tree, rel)) continue;
+            if (tree.count >= MAX_TREE_ENTRIES) return -1;
+
+            TreeEntry *te = &tree.entries[tree.count++];
+            te->mode = entry->mode;
+            te->hash = entry->hash;
+            snprintf(te->name, sizeof(te->name), "%s", rel);
+            continue;
+        }
+
+        size_t dir_len = (size_t)(slash - rel);
+        if (dir_len == 0 || dir_len >= sizeof(tree.entries[0].name)) return -1;
+
+        char dir_name[256];
+        memcpy(dir_name, rel, dir_len);
+        dir_name[dir_len] = '\0';
+
+        if (tree_has_entry(&tree, dir_name)) continue;
+        if (tree.count >= MAX_TREE_ENTRIES) return -1;
+
+        char child_prefix[1024];
+        int n = snprintf(child_prefix, sizeof(child_prefix), "%s%s/", prefix, dir_name);
+        if (n < 0 || (size_t)n >= sizeof(child_prefix)) return -1;
+
+        ObjectID child_tree_id;
+        if (write_tree_level(entries, entry_count, child_prefix, &child_tree_id) != 0) return -1;
+
+        TreeEntry *te = &tree.entries[tree.count++];
+        te->mode = MODE_DIR;
+        te->hash = child_tree_id;
+        snprintf(te->name, sizeof(te->name), "%s", dir_name);
+    }
+
+    void *serialized = NULL;
+    size_t serialized_len = 0;
+    if (tree_serialize(&tree, &serialized, &serialized_len) != 0) return -1;
+
+    int rc = object_write(OBJ_TREE, serialized, serialized_len, id_out);
+    free(serialized);
+    return rc;
+}
+
 // Serialize a Tree struct into binary format for storage.
 // Caller must free(*data_out).
 // Returns 0 on success, -1 on error.
@@ -130,8 +246,9 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //
 // Returns 0 on success, -1 on error.
 int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
-    return -1;
+    StagedEntry entries[MAX_STAGED_ENTRIES];
+    int count = 0;
+
+    if (load_staged_entries(entries, &count) != 0) return -1;
+    return write_tree_level(entries, count, "", id_out);
 }
