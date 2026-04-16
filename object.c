@@ -175,9 +175,13 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     }
 
     if (rename(tmp_path, final_path) != 0) {
-        unlink(tmp_path);
-        free(full_obj);
-        return -1;
+        if (errno == EEXIST) {
+            unlink(tmp_path);
+        } else {
+            unlink(tmp_path);
+            free(full_obj);
+            return -1;
+        }
     }
 
     int dirfd = open(shard_dir, O_RDONLY | O_DIRECTORY);
