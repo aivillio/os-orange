@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <inttypes.h>
+#include <errno.h>
 
 // Forward declaration (implemented in object.c)
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
@@ -128,7 +129,10 @@ static int load_staged_entries(StagedEntry *entries, int *count_out) {
     *count_out = 0;
 
     FILE *f = fopen(INDEX_FILE, "r");
-    if (!f) return 0;
+    if (!f) {
+        if (errno == ENOENT) return 0;
+        return -1;
+    }
 
     char line[2048];
     while (fgets(line, sizeof(line), f)) {
