@@ -120,6 +120,8 @@ int index_status(const Index *index) {
             if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
             if (strcmp(ent->d_name, ".pes") == 0) continue;
             if (strcmp(ent->d_name, "pes") == 0) continue; // compiled executable
+            if (strcmp(ent->d_name, "test_tree") == 0) continue;
+            if (strcmp(ent->d_name, "test_objects") == 0) continue;
             if (strstr(ent->d_name, ".o") != NULL) continue; // object files
 
             // Check if file is tracked in the index
