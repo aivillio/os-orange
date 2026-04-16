@@ -245,7 +245,14 @@ int index_save(const Index *index) {
     }
 
     free(sorted);
-    return rename(tmp_path, INDEX_FILE);
+    if (rename(tmp_path, INDEX_FILE) != 0) return -1;
+
+    int dirfd = open(PES_DIR, O_RDONLY);
+    if (dirfd >= 0) {
+        fsync(dirfd);
+        close(dirfd);
+    }
+    return 0;
 }
 
 // Stage a file for the next commit.
