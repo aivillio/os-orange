@@ -170,13 +170,29 @@ int head_update(const ObjectID *new_commit) {
     
     char hex[HASH_HEX_SIZE + 1];
     hash_to_hex(new_commit, hex);
-    fprintf(f, "%s\n", hex);
-    
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-    
-    return rename(tmp_path, target_path);
+    if (fprintf(f, "%s\n", hex) < 0) {
+        fclose(f);
+        unlink(tmp_path);
+        return -1;
+    }
+
+    if (fflush(f) != 0 || fsync(fileno(f)) != 0 || fclose(f) != 0) {
+        unlink(tmp_path);
+        return -1;
+    }
+
+    if (rename(tmp_path, target_path) != 0) {
+        unlink(tmp_path);
+        return -1;
+    }
+
+    int dirfd = open(REFS_DIR "/heads", O_RDONLY);
+    if (dirfd >= 0) {
+        fsync(dirfd);
+        close(dirfd);
+    }
+
+    return 0;
 }
 
 // ─── TODO: Implement these ───────────────────────────────────────────────────
